@@ -348,8 +348,8 @@ class AqaraFP2Card extends HTMLElement {
   }
 
   renderCanvas(data) {
-    // Calculate canvas dimensions
-    const containerWidth = this.canvas.clientWidth || 600;
+    // Calculate canvas dimensions from card content container
+    const containerWidth = this.content.clientWidth || 600;
     const dpr = window.devicePixelRatio || 1;
 
     // Determine which cells to display
