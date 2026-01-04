@@ -302,31 +302,25 @@ class AqaraFP2Card extends HTMLElement {
         const zonePrefix = getDeviceEntityPrefix(deviceId);
         if (!zonePrefix) return;
 
-        // Extract zone ID from prefix (format: {prefix}_zone_{id})
-        const zoneIdMatch = zonePrefix.match(/_zone_(.+)$/);
-        if (!zoneIdMatch) {
-          console.warn(`[FP2 Card] ✗ Could not extract zone ID from prefix: ${zonePrefix}`);
-          return;
-        }
-
-        const zoneId = zoneIdMatch[1];
-        console.log(`[FP2 Card] Processing zone: ${zoneId} (prefix: ${zonePrefix})`);
+        // Use the device's friendly name as the zone ID/label
+        const zoneName = device.name_by_user || device.name || deviceId;
+        console.log(`[FP2 Card] Processing zone: ${zoneName} (prefix: ${zonePrefix})`);
 
         const mapEntity = `${zonePrefix}_map`;
         const occupancyEntity = `${zonePrefix}_occupancy`;
         const motionEntity = `${zonePrefix}_motion`;
 
-        const zoneMap = parseGrid(getEntityState(mapEntity), `zone_${zoneId}_map`);
+        const zoneMap = parseGrid(getEntityState(mapEntity), `zone_${zoneName}_map`);
         const occupancyState = getEntityState(occupancyEntity);
         const motionState = getEntityState(motionEntity);
 
         zones.push({
-          id: zoneId,
+          id: zoneName,
           map: zoneMap,
           occupancy: occupancyState === "on",
           motion: motionState,
         });
-        console.log(`[FP2 Card] ✓ Zone ${zoneId}: occupancy=${occupancyState}, motion=${motionState}`);
+        console.log(`[FP2 Card] ✓ Zone ${zoneName}: occupancy=${occupancyState}, motion=${motionState}`);
       });
     } else {
       console.warn(`[FP2 Card] ✗ Could not find main device, zones will not be loaded`);
@@ -594,7 +588,7 @@ class AqaraFP2Card extends HTMLElement {
           this.ctx.strokeStyle = "rgba(50, 100, 255, 0.8)";
           this.ctx.lineWidth = 2;
 
-          const labelText = `Z${zone.id}`;
+          const labelText = zone.id;
           this.ctx.font = `bold ${Math.min(cellSize * 0.6, 16)}px sans-serif`;
           this.ctx.textAlign = "center";
           this.ctx.textBaseline = "middle";
