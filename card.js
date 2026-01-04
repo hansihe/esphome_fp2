@@ -250,9 +250,9 @@ class AqaraFP2Card extends HTMLElement {
         const hexChars = gridString.substr(y * 4, 4);
         const rowBits = parseInt(hexChars, 16);
 
-        // Extract the 14 LSBs as cell values
+        // Extract the 14 LSBs as cell values (LSB = rightmost cell)
         for (let x = 0; x < 14; x++) {
-          grid[y][x] = (rowBits >> x) & 1;
+          grid[y][x] = (rowBits >> (13 - x)) & 1;
         }
       }
       console.log(`[FP2 Card] ✓ Grid "${gridName}" parsed successfully`);
