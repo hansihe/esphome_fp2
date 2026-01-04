@@ -2,6 +2,7 @@
 #include "esphome/components/switch/switch.h"
 #include "esphome/core/hal.h"
 #include "esphome/core/log.h"
+#include <cstdint>
 #include <vector>
 
 namespace esphome {
@@ -91,45 +92,20 @@ void FP2Component::check_initialization_() {
     init_done_ = true;
 
     // 1. Basic Settings
-    // monitor_mode=1 (Realtime?)
-    enqueue_command_(OpCode::WRITE, 0x0105, (uint8_t)1);
-    // work_mode=1 (Normal?)
-    enqueue_command_(OpCode::WRITE, 0x0116, (uint8_t)1);
-
-    // Startup commands from trace
-    // presence_detection_sensitivity (0x0111)
-    enqueue_command_(OpCode::WRITE, 0x0111, presence_sensitivity_);
-
-    // closing_setting (0x0106)
-    enqueue_command_(OpCode::WRITE, 0x0106, closing_setting_);
-
-    // Mounting
-    enqueue_command_(OpCode::WRITE, 0x0170, mounting_position_);
+    enqueue_command_(OpCode::WRITE, 0x0105, (uint8_t) 0);
     enqueue_command_(OpCode::WRITE, 0x0122,
                      (uint8_t)(left_right_reverse_ ? 2 : 0));
-
-    // fall_detection_sensitivity (0x0123)
+    enqueue_command_(OpCode::WRITE, 0x0111, presence_sensitivity_);
+    enqueue_command_(OpCode::WRITE, 0x0106, closing_setting_);
+    enqueue_command_(OpCode::WRITE, 0x0153, (uint16_t) 0x0001);
     enqueue_command_(OpCode::WRITE, 0x0123, fall_detection_sensitivity_);
-
-    // people_counting_report_enable (0x0158)
-    enqueue_command_(OpCode::WRITE, 0x0158,
-                     (uint8_t)(people_counting_report_enable_ ? 1 : 0)); // BOOL
-
-    // people_number_enable (0x0162)
-    enqueue_command_(OpCode::WRITE, 0x0162,
-                     (uint8_t)(people_number_enable_ ? 1 : 0)); // BOOL
-
-    // target_type_enable (0x0163)
-    enqueue_command_(OpCode::WRITE, 0x0163,
-                     (uint8_t)(target_type_enable_ ? 1 : 0)); // BOOL
-
-    // dwell_time_enable (0x0172)
-    enqueue_command_(OpCode::WRITE, 0x0172,
-                     (uint8_t)(dwell_time_enable_ ? 1 : 0)); // BOOL
-
-    // walking_distance_enable (0x0173)
-    enqueue_command_(OpCode::WRITE, 0x0173,
-                     (uint8_t)(walking_distance_enable_ ? 1 : 0)); // BOOL
+    enqueue_command_(OpCode::WRITE, 0x0158, people_counting_report_enable_); // BOOL
+    enqueue_command_(OpCode::WRITE, 0x0162, people_number_enable_); // BOOL
+    enqueue_command_(OpCode::WRITE, 0x0163, target_type_enable_); // BOOL
+    enqueue_command_(OpCode::WRITE, 0x0168, (uint8_t) 0); // sleep zone mount pos
+    enqueue_command_(OpCode::WRITE, 0x0170, mounting_position_);
+    enqueue_command_(OpCode::WRITE, 0x0172, (uint8_t) 0); // dwell time enable
+    enqueue_command_(OpCode::WRITE, 0x0173, (uint8_t) 0); // walking distance enable
 
     // 2. Grids
     if (has_interference_grid_) {
@@ -150,6 +126,7 @@ void FP2Component::check_initialization_() {
     }
 
     // 3. Zones
+    std::vector<uint8_t> activations(32, 0);
     for (const auto &zone : zones_) {
       // a. Send Zone Detect Setting (0x0114)
       // Structure: [ZoneID] [40 byte Map]
@@ -163,16 +140,17 @@ void FP2Component::check_initialization_() {
       uint16_t sens_val = (zone->id << 8) | (zone->sensitivity & 0xFF);
       enqueue_command_(OpCode::WRITE, 0x0151, sens_val);
 
-      // Close/Away Enable default?
-      // Trace: 0x0153 Zone Close Away Enable.
-      // We can enable it by default for now or add config options later.
-      // enqueue_command_(OpCode::WRITE, 0x0153, (uint16_t)((zone.id << 8) |
-      // 1));
+      activations[zone->id] = zone->id;
     }
 
-    // 4. Enable Reporting
-    // presence_det = 1 (0x0104)
-    enqueue_command_(OpCode::WRITE, 0x0104, (uint8_t)1);
+    enqueue_command_(OpCode::WRITE, 0x0202, activations);
+
+    for (const auto &zone : zones_) {
+        // Close/Away Enable default?
+        // Trace: 0x0153 Zone Close Away Enable.
+        // We can enable it by default for now or add config options later.
+        enqueue_command_(OpCode::WRITE, 0x0153, (uint16_t)((zone->id << 8) | 1));
+    }
 
     // 5. Publish grid sensors once initialization completes
     ESP_LOGI(TAG, "Publishing grid sensors: has_edge=%d edge_sensor=%p has_exit=%d exit_sensor=%p has_interference=%d interference_sensor=%p",
@@ -654,6 +632,23 @@ void FP2Component::enqueue_command_(OpCode type, uint16_t sub_id,
 
   command_queue_.push_back(cmd);
 }
+
+void FP2Component::enqueue_command_(OpCode type, uint16_t sub_id,
+                                    bool bool_val) {
+  FP2Command cmd;
+  cmd.type = type;
+  cmd.sub_id = sub_id;
+  cmd.retry_count = 0;
+
+  // Payload: [SubID 2] [Type 1] [Data 1]
+  cmd.data.push_back((sub_id >> 8) & 0xFF);
+  cmd.data.push_back(sub_id & 0xFF);
+  cmd.data.push_back(0x04); // BOOL
+  cmd.data.push_back((uint8_t) bool_val);
+
+  command_queue_.push_back(cmd);
+}
+
 
 void FP2Component::enqueue_command_blob2_(
     uint16_t sub_id, const std::vector<uint8_t> &blob_content) {

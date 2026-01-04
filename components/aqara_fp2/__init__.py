@@ -145,7 +145,7 @@ CONFIG_SCHEMA = (
         {
             cv.GenerateID(): cv.declare_id(FP2Component),
             cv.Optional(CONF_RESET_PIN): pins.gpio_output_pin_schema,
-            cv.Optional(CONF_MOUNTING_POSITION, default="wall"): cv.enum(
+            cv.Optional(CONF_MOUNTING_POSITION, default="left_corner"): cv.enum(
                 MOUNTING_POSITIONS
             ),
             cv.Optional(CONF_LEFT_RIGHT_REVERSE, default=False): cv.boolean,
@@ -181,7 +181,10 @@ async def to_code(config):
     if CONF_ZONES in config:
         for i, zone_conf in enumerate(config[CONF_ZONES]):
             var = cg.new_Pvariable(
-                zone_conf[CONF_ID], zone_conf[CONF_GRID], zone_conf[CONF_SENSITIVITY]
+                zone_conf[CONF_ID],
+                i + 1,
+                zone_conf[CONF_GRID],
+                zone_conf[CONF_SENSITIVITY],
             )
             await cg.register_component(var, zone_conf)
             zones.append(var)
@@ -252,7 +255,7 @@ async def to_code(config):
         zones_data = []
         for i, zone_conf in enumerate(config[CONF_ZONES]):
             zone_data = {
-                "id": i,
+                "id": i + 1,
                 "sensitivity": zone_conf[CONF_SENSITIVITY],
                 "grid": grid_to_hex_string(zone_conf[CONF_GRID]),
             }

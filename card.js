@@ -9,9 +9,6 @@
  * - show_sensor_position: (optional) Show sensor position marker - Default: true
  * - show_zone_labels: (optional) Show zone labels - Default: true
  * - mounting_position: (optional) Sensor mounting position - Default: from entity or "wall"
- * - position_scale: (optional) Scale factor for target positions - Default: 0.01 (1/100 fixed-point)
- * - position_bias_x: (optional) X offset to add to target positions after scaling - Default: 0
- * - position_bias_y: (optional) Y offset to add to target positions after scaling - Default: 0
  */
 class AqaraFP2Card extends HTMLElement {
   constructor() {
@@ -605,16 +602,28 @@ class AqaraFP2Card extends HTMLElement {
   drawTargets(data, minX, maxX, minY, maxY, cellSize) {
     if (!data.targets || !Array.isArray(data.targets)) return;
 
-    // Get position scale and bias from config (defaults: scale=0.01, bias=0)
-    const positionScale = this.config.position_scale !== undefined ? this.config.position_scale : 0.01;
-    const positionBiasX = this.config.position_bias_x !== undefined ? this.config.position_bias_x : 0;
-    const positionBiasY = this.config.position_bias_y !== undefined ? this.config.position_bias_y : 0;
-
     data.targets.forEach((target) => {
-      // Target positions are in fixed-point format (default 1/100 scale)
-      // Convert from fixed-point to grid coordinates using scale and bias
-      const x = target.x * positionScale + positionBiasX;
-      const y = target.y * positionScale + positionBiasY;
+      let gridX, gridY;
+
+      // Convert raw coordinates to grid space based on mounting mode
+      if (data.mountingPosition === "left_upper_corner" || data.mountingPosition === "right_upper_corner") {
+        // Corner mounting modes: 14x14 grid, 7m x 7m area
+        // Raw coordinates: X in [-400, +400], Y in [0, 800]
+        // X = +400: Left edge, X = -400: Right edge
+        // Y = 0: Top edge (closest to sensor), Y = 800: Bottom edge (farthest from sensor)
+        // Conversion: Grid_X = (X + 400) / 800.0 * 14.0, Grid_Y = Y / 800.0 * 14.0
+        gridX = (target.x + 400) / 800.0 * 14.0;
+        gridY = target.y / 800.0 * 14.0;
+      } else {
+        // Wall mounting mode - TODO: coordinate conversion not yet verified
+        // Stubbing with basic conversion for now
+        console.warn(`[FP2 Card] Wall mounting mode coordinate conversion is not yet implemented, using placeholder`);
+        gridX = target.x * 0.01; // Placeholder
+        gridY = target.y * 0.01; // Placeholder
+      }
+
+      const x = gridX;
+      const y = gridY;
 
       // Check if target is in visible range
       if (x < minX || x > maxX || y < minY || y > maxY) return;
@@ -642,9 +651,19 @@ class AqaraFP2Card extends HTMLElement {
 
       // Draw velocity vector if available
       if (target.velocity_x !== undefined && target.velocity_y !== undefined) {
-        // Velocity is also in fixed-point format (use same scale)
-        const vx = target.velocity_x * positionScale;
-        const vy = target.velocity_y * positionScale;
+        let vx, vy;
+
+        // Convert velocity using the same coordinate system as position
+        if (data.mountingPosition === "left_upper_corner" || data.mountingPosition === "right_upper_corner") {
+          // Velocity scaling: same as position, but without the bias offset
+          vx = target.velocity_x / 800.0 * 14.0;
+          vy = target.velocity_y / 800.0 * 14.0;
+        } else {
+          // Wall mounting mode - placeholder
+          vx = target.velocity_x * 0.01;
+          vy = target.velocity_y * 0.01;
+        }
+
         const magnitude = Math.sqrt(vx * vx + vy * vy);
 
         if (magnitude > 0.1) {

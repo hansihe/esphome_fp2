@@ -22,7 +22,7 @@ static const char *const TAG = "aqara_fp2";
 using GridMap = std::array<uint8_t, 40>;
 
 struct FP2Zone : public Component {
-  FP2Zone(const GridMap grid, uint8_t sensitivity) : grid(grid), sensitivity(sensitivity) {}
+  FP2Zone(uint8_t zone_id, const GridMap grid, uint8_t sensitivity) : id(zone_id), grid(grid), sensitivity(sensitivity) {}
 
   void set_presence_sensor(binary_sensor::BinarySensor *sensor) {
     this->presence_sensor = sensor;
@@ -316,6 +316,7 @@ protected:
                         const std::vector<uint8_t> &data = {});
   void enqueue_command_(OpCode type, uint16_t sub_id, uint8_t byte_val);
   void enqueue_command_(OpCode type, uint16_t sub_id, uint16_t word_val);
+  void enqueue_command_(OpCode type, uint16_t sub_id, bool bool_val);
   void enqueue_command_blob2_(uint16_t sub_id,
                               const std::vector<uint8_t> &blob_content);
   void send_reverse_response_(uint16_t sub_id, uint8_t byte_val);
