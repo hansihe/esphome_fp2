@@ -7,6 +7,8 @@
 
 Custom ESPHome components and Home Assistant visualization card for the Aqara FP2 Presence Sensor.
 
+![Card screenshot](images/card_screenshot.png)
+
 ## Overview
 
 This project provides two main components for working with the Aqara FP2 mmWave presence sensor:
