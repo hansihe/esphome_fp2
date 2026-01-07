@@ -1,6 +1,6 @@
 #include "fp2_component.h"
 #include "esphome/components/switch/switch.h"
-#include "esphome/core/base64.h"
+#include "esphome/core/helpers.h"
 #include "esphome/core/hal.h"
 #include "esphome/core/log.h"
 #include <cstdint>
@@ -510,7 +510,7 @@ void FP2Component::handle_location_tracking_report_(const std::vector<uint8_t> &
   }
 
   // Base64 encode the binary data
-  std::string base64_str = base64::encode(binary_data);
+  std::string base64_str = esphome::base64_encode(binary_data);
 
   if (this->target_tracking_sensor_ != nullptr) {
     this->target_tracking_sensor_->publish_state(base64_str);
