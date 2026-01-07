@@ -43,12 +43,40 @@ class AqaraFP2Card extends HTMLElement {
     console.log(`[FP2 Card] Card configured with entity_prefix: ${config.entity_prefix}`);
   }
 
+  getReportTargetsSwitchEntity() {
+    // Convert entity_prefix (e.g., "sensor.fp2_living_room") to switch entity
+    // Result: "switch.fp2_living_room_report_targets"
+    const prefix = this.config.entity_prefix;
+    const deviceName = prefix.replace(/^[^.]+\./, ''); // Remove domain prefix (sensor., etc.)
+    return `switch.${deviceName}_report_targets`;
+  }
+
+  toggleLiveView() {
+    const switchEntity = this.getReportTargetsSwitchEntity();
+    const switchState = this._hass.states[switchEntity];
+
+    if (!switchState) {
+      console.warn(`[FP2 Card] Switch entity not found: ${switchEntity}`);
+      return;
+    }
+
+    const service = switchState.state === 'on' ? 'turn_off' : 'turn_on';
+    console.log(`[FP2 Card] Toggling live view: ${switchEntity} -> ${service}`);
+
+    this._hass.callService('switch', service, {
+      entity_id: switchEntity
+    });
+  }
+
   initializeCard() {
     this.innerHTML = `
       <ha-card>
         <div class="card-header">
           <div class="name">${this.config.title || "Aqara FP2 Presence Sensor"}</div>
           <div class="controls">
+            <button class="live-view-toggle" title="Toggle Live View (Target Reporting)">
+              <ha-icon icon="mdi:eye"></ha-icon>
+            </button>
             <button class="mode-toggle" title="Toggle Display Mode">
               <ha-icon icon="mdi:fit-to-screen"></ha-icon>
             </button>
@@ -120,6 +148,10 @@ class AqaraFP2Card extends HTMLElement {
     this.infoPanel = this.querySelector(".info-panel");
 
     // Set up event listeners
+    this.querySelector(".live-view-toggle").addEventListener("click", () => {
+      this.toggleLiveView();
+    });
+
     this.querySelector(".mode-toggle").addEventListener("click", () => {
       this.displayMode = this.displayMode === "full" ? "zoomed" : "full";
       this.updateCard();
@@ -144,8 +176,23 @@ class AqaraFP2Card extends HTMLElement {
 
     console.log(`[FP2 Card] ===== Card update triggered =====`);
     const data = this.gatherEntityData();
+    this.updateLiveViewButton();
     this.renderCanvas(data);
     this.updateInfoPanel(data);
+  }
+
+  updateLiveViewButton() {
+    const switchEntity = this.getReportTargetsSwitchEntity();
+    const switchState = this._hass.states[switchEntity];
+    const button = this.querySelector(".live-view-toggle");
+
+    if (!button) return;
+
+    if (switchState && switchState.state === 'on') {
+      button.classList.add('active');
+    } else {
+      button.classList.remove('active');
+    }
   }
 
   gatherEntityData() {
