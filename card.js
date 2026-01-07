@@ -77,9 +77,6 @@ class AqaraFP2Card extends HTMLElement {
             <button class="live-view-toggle" title="Toggle Live View (Target Reporting)">
               <ha-icon icon="mdi:eye"></ha-icon>
             </button>
-            <button class="mode-toggle" title="Toggle Display Mode">
-              <ha-icon icon="mdi:fit-to-screen"></ha-icon>
-            </button>
           </div>
         </div>
         <div class="card-content">
@@ -150,11 +147,6 @@ class AqaraFP2Card extends HTMLElement {
     // Set up event listeners
     this.querySelector(".live-view-toggle").addEventListener("click", () => {
       this.toggleLiveView();
-    });
-
-    this.querySelector(".mode-toggle").addEventListener("click", () => {
-      this.displayMode = this.displayMode === "full" ? "zoomed" : "full";
-      this.updateCard();
     });
 
     this.canvas.addEventListener("click", (e) => this.handleCanvasClick(e));
@@ -332,8 +324,8 @@ class AqaraFP2Card extends HTMLElement {
       "interference_grid"
     );
 
-    // Get mounting position (from config or attribute)
-    const mountingPosition = this.config.mounting_position || "wall";
+    // Get mounting position from entity (falls back to "wall" if not available)
+    const mountingPosition = getEntityState(`${prefix}_mounting_position`) || "wall";
 
     // --- Detection Zones (Sub-Devices) ---
     // Each zone is registered as a sub-device (via_device_id points to main FP2 device)

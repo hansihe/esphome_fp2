@@ -682,6 +682,8 @@ void FP2TextSensor::setup() {
       parent_->set_entry_exit_grid_sensor(this);
     } else if (sensor_type_ == FP2TextSensorType::INTERFERENCE_GRID) {
       parent_->set_interference_grid_sensor(this);
+    } else if (sensor_type_ == FP2TextSensorType::MOUNTING_POSITION) {
+      parent_->set_mounting_position_sensor(this);
     }
   }
 }

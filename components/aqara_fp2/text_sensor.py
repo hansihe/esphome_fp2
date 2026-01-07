@@ -17,6 +17,7 @@ SENSOR_TYPES = {
     "entry_exit_grid": FP2TextSensorType.ENTRY_EXIT_GRID,
     "interference_grid": FP2TextSensorType.INTERFERENCE_GRID,
     "zone_map": FP2TextSensorType.ZONE_MAP,
+    "mounting_position": FP2TextSensorType.MOUNTING_POSITION,
 }
 
 CONFIG_SCHEMA = cv.typed_schema(
@@ -40,6 +41,15 @@ CONFIG_SCHEMA = cv.typed_schema(
         )
         .extend(cv.COMPONENT_SCHEMA),
         "interference_grid": text_sensor.text_sensor_schema(
+            FP2TextSensor,
+        )
+        .extend(
+            {
+                cv.GenerateID(CONF_FP2_ID): cv.use_id(FP2Component),
+            }
+        )
+        .extend(cv.COMPONENT_SCHEMA),
+        "mounting_position": text_sensor.text_sensor_schema(
             FP2TextSensor,
         )
         .extend(

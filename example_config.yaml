@@ -129,6 +129,11 @@ binary_sensor:
 
 text_sensor:
   - platform: aqara_fp2
+    fp2_id: fp2
+    type: mounting_position
+    name: "Mounting Position"
+
+  - platform: aqara_fp2
     id: edge_label_grid
     fp2_id: fp2
     type: edge_label_grid

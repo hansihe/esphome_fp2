@@ -96,6 +96,7 @@ enum class FP2TextSensorType {
   ENTRY_EXIT_GRID,
   INTERFERENCE_GRID,
   ZONE_MAP,
+  MOUNTING_POSITION,
 };
 
 class FP2TextSensor : public text_sensor::TextSensor, public Component {
@@ -218,6 +219,18 @@ public:
       ESP_LOGW(TAG, "NOT publishing interference grid from setter (has_grid=%d, sensor=%p)", has_interference_grid_, interference_grid_sensor_);
     }
   }
+  void set_mounting_position_sensor(text_sensor::TextSensor *sensor) {
+    mounting_position_sensor_ = sensor;
+    if (mounting_position_sensor_ != nullptr) {
+      const char* pos_str;
+      switch (mounting_position_) {
+        case 0x02: pos_str = "left_upper_corner"; break;
+        case 0x03: pos_str = "right_upper_corner"; break;
+        default: pos_str = "wall"; break;
+      }
+      mounting_position_sensor_->publish_state(pos_str);
+    }
+  }
 
   void set_fp2_accel(aqara_fp2_accel::AqaraFP2Accel *accel) {
       fp2_accel_ = accel;
@@ -287,6 +300,7 @@ protected:
   text_sensor::TextSensor *edge_label_grid_sensor_{nullptr};
   text_sensor::TextSensor *entry_exit_grid_sensor_{nullptr};
   text_sensor::TextSensor *interference_grid_sensor_{nullptr};
+  text_sensor::TextSensor *mounting_position_sensor_{nullptr};
 
   // Map Configuration (compile-time generated)
   std::string map_config_json_;
