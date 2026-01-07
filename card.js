@@ -637,10 +637,10 @@ class AqaraFP2Card extends HTMLElement {
       const y = gridY;
 
       // Check if target is in visible range
-      if (x < minX || x > maxX || y < minY || y > maxY) return;
+      if (x < minX || x > maxX + 1 || y < minY || y > maxY + 1) return;
 
-      const xPos = (x - minX) * cellSize + cellSize / 2;
-      const yPos = (y - minY) * cellSize + cellSize / 2;
+      const xPos = (x - minX) * cellSize;
+      const yPos = (y - minY) * cellSize;
       const radius = Math.min(cellSize * 0.3, 15);
 
       // Draw target circle
