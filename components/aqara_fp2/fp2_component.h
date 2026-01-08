@@ -64,54 +64,7 @@ struct FP2Zone : public Component {
   uint8_t sensitivity; // 1=Low, 2=Med, 3=High
 };
 
-enum class FP2ZoneSensorType {
-  PRESENCE,
-  MOTION,
-};
-
-class FP2ZoneBinarySensor : public binary_sensor::BinarySensor, public Component {
- public:
-  void set_zone(FP2Zone *zone) { zone_ = zone; }
-  void set_sensor_type(FP2ZoneSensorType type) { sensor_type_ = type; }
-
-  void setup() override {
-    if (zone_ != nullptr) {
-      if (sensor_type_ == FP2ZoneSensorType::PRESENCE) {
-        zone_->set_presence_sensor(this);
-      } else if (sensor_type_ == FP2ZoneSensorType::MOTION) {
-        zone_->set_motion_sensor(this);
-      }
-    }
-  }
-
- protected:
-  FP2Zone *zone_{nullptr};
-  FP2ZoneSensorType sensor_type_;
-};
-
 class FP2Component;
-
-enum class FP2TextSensorType {
-  EDGE_LABEL_GRID,
-  ENTRY_EXIT_GRID,
-  INTERFERENCE_GRID,
-  ZONE_MAP,
-  MOUNTING_POSITION,
-};
-
-class FP2TextSensor : public text_sensor::TextSensor, public Component {
- public:
-  void set_parent(FP2Component *parent) { parent_ = parent; }
-  void set_zone(FP2Zone *zone) { zone_ = zone; }
-  void set_sensor_type(FP2TextSensorType type) { sensor_type_ = type; }
-
-  void setup() override;
-
- protected:
-  FP2Component *parent_{nullptr};
-  FP2Zone *zone_{nullptr};
-  FP2TextSensorType sensor_type_;
-};
 
 enum class OpCode : uint8_t {
   // Device -> Host: Standard Response to Read (Values).

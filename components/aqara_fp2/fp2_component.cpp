@@ -659,25 +659,6 @@ void FP2Component::set_zones(const std::vector<FP2Zone*> &zones) {
     zones_ = zones;
 }
 
-void FP2TextSensor::setup() {
-  // Link sensor to zone for zone_map type
-  if (sensor_type_ == FP2TextSensorType::ZONE_MAP && zone_ != nullptr) {
-    zone_->set_map_sensor(this);
-  }
-  // Link grid sensors to parent component
-  if (parent_ != nullptr) {
-    if (sensor_type_ == FP2TextSensorType::EDGE_LABEL_GRID) {
-      parent_->set_edge_label_grid_sensor(this);
-    } else if (sensor_type_ == FP2TextSensorType::ENTRY_EXIT_GRID) {
-      parent_->set_entry_exit_grid_sensor(this);
-    } else if (sensor_type_ == FP2TextSensorType::INTERFERENCE_GRID) {
-      parent_->set_interference_grid_sensor(this);
-    } else if (sensor_type_ == FP2TextSensorType::MOUNTING_POSITION) {
-      parent_->set_mounting_position_sensor(this);
-    }
-  }
-}
-
 std::string FP2Component::grid_to_hex_card_format(const GridMap &grid) {
   std::string result;
   result.reserve(56);  // 14 rows * 2 bytes * 2 hex chars

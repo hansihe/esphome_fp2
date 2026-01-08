@@ -111,6 +111,13 @@ aqara_fp2:
         . . . . . . . . . . . . . .
         . . . . . . . . . . . . . .
         . . . . . . . . . . . . . .
+      presence: sofa_zone_presence
+      zone_map: sofa_zone_map
+
+  edge_label_grid_sensor: edge_label_grid_sensor
+  entry_exit_grid_sensor: entry_exit_grid_sensor
+  interference_grid_sensor: interference_grid_sensor
+  mounting_position_sensor: mounting_position_sensor
 
 # User Button (README: SENSOR_VP - USER_SWITCH -> GPIO36)
 binary_sensor:
@@ -121,40 +128,31 @@ binary_sensor:
       then:
         - logger.log: "Button Pressed!"
 
-  - platform: aqara_fp2
-    type: presence
-    zone_id: sofa_zone
+  - platform: template
+    id: sofa_zone_presence
     name: "Sofa Zone Presence"
+    device_class: occupancy
     device_id: test_sofa_zone_device
 
 text_sensor:
-  - platform: aqara_fp2
-    fp2_id: fp2
-    type: mounting_position
+  - platform: template
+    id: mounting_position_sensor
     name: "Mounting Position"
 
-  - platform: aqara_fp2
-    id: edge_label_grid
-    fp2_id: fp2
-    type: edge_label_grid
+  - platform: template
+    id: edge_label_grid_sensor
     name: "Edge Label Grid"
 
-  - platform: aqara_fp2
-    id: entry_exit_grid
-    fp2_id: fp2
-    type: entry_exit_grid
+  - platform: template
+    id: entry_exit_grid_sensor
     name: "Entry Exit Grid"
 
-  - platform: aqara_fp2
-    id: interference_grid
-    fp2_id: fp2
-    type: interference_grid
+  - platform: template
+    id: interference_grid_sensor
     name: "Interference Grid"
 
-  - platform: aqara_fp2
-    fp2_id: fp2
-    type: zone_map
-    zone_id: sofa_zone
+  - platform: template
+    id: sofa_zone_map
     name: "Zone Map"
     device_id: test_sofa_zone_device
 

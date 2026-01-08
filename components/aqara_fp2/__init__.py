@@ -139,6 +139,9 @@ ZONE_SCHEMA = cv.Schema(
         cv.GenerateID(CONF_ID): cv.declare_id(FP2Zone),
         cv.Required(CONF_GRID): parse_ascii_grid,
         cv.Optional(CONF_SENSITIVITY, default="medium"): cv.enum(SENSITIVITY_LEVELS),
+        cv.Optional("presence"): cv.use_id(binary_sensor.BinarySensor),
+        cv.Optional("motion"): cv.use_id(binary_sensor.BinarySensor),
+        cv.Optional("zone_map"): cv.use_id(text_sensor_.TextSensor),
     }
 )
 
@@ -173,6 +176,10 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_LOCATION_REPORT_SWITCH): switch.switch_schema(
                 FP2LocationSwitch
             ),
+            cv.Optional("edge_label_grid_sensor"): cv.use_id(text_sensor_.TextSensor),
+            cv.Optional("entry_exit_grid_sensor"): cv.use_id(text_sensor_.TextSensor),
+            cv.Optional("interference_grid_sensor"): cv.use_id(text_sensor_.TextSensor),
+            cv.Optional("mounting_position_sensor"): cv.use_id(text_sensor_.TextSensor),
         }
     )
     .extend(uart.UART_DEVICE_SCHEMA)
@@ -191,6 +198,20 @@ async def to_code(config):
                 zone_conf[CONF_SENSITIVITY],
             )
             await cg.register_component(var, zone_conf)
+
+            # Link sensors if provided
+            if "presence" in zone_conf:
+                sens = await cg.get_variable(zone_conf["presence"])
+                cg.add(var.set_presence_sensor(sens))
+
+            if "motion" in zone_conf:
+                sens = await cg.get_variable(zone_conf["motion"])
+                cg.add(var.set_motion_sensor(sens))
+
+            if "zone_map" in zone_conf:
+                sens = await cg.get_variable(zone_conf["zone_map"])
+                cg.add(var.set_map_sensor(sens))
+
             zones.append(var)
 
     var = cg.new_Pvariable(config[CONF_ID])
@@ -235,6 +256,23 @@ async def to_code(config):
     if CONF_LOCATION_REPORT_SWITCH in config:
         sw = await switch.new_switch(config[CONF_LOCATION_REPORT_SWITCH])
         cg.add(var.set_location_report_switch(sw))
+
+    # Link component text sensors if provided
+    if "edge_label_grid_sensor" in config:
+        sens = await cg.get_variable(config["edge_label_grid_sensor"])
+        cg.add(var.set_edge_label_grid_sensor(sens))
+
+    if "entry_exit_grid_sensor" in config:
+        sens = await cg.get_variable(config["entry_exit_grid_sensor"])
+        cg.add(var.set_entry_exit_grid_sensor(sens))
+
+    if "interference_grid_sensor" in config:
+        sens = await cg.get_variable(config["interference_grid_sensor"])
+        cg.add(var.set_interference_grid_sensor(sens))
+
+    if "mounting_position_sensor" in config:
+        sens = await cg.get_variable(config["mounting_position_sensor"])
+        cg.add(var.set_mounting_position_sensor(sens))
 
     # Generate map config JSON data at compile time
     map_config_data = {
