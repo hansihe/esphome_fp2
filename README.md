@@ -9,6 +9,8 @@ Custom ESPHome components and Home Assistant visualization card for the Aqara FP
 
 ![Card screenshot](images/card_screenshot.png)
 
+See [FLASHING.md](FLASHING.md) for flashing instructions.
+
 ## Overview
 
 This project provides two main components for working with the Aqara FP2 mmWave presence sensor:
@@ -63,8 +65,7 @@ The FP2 uses a 14×14 grid to map the detection area:
 
 ### Flashing Instructions
 
-> **TODO**: Detailed instructions for flashing the FP2 hardware are in progress.
-> This requires opening the device and connecting to the ESP32 module inside.
+See [FLASHING.md](FLASHING.md) for flashing instructions.
 
 ---
 
