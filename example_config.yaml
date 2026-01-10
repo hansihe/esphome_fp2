@@ -14,10 +14,13 @@ esp32:
       ignore_efuse_custom_mac: true
 
 wifi:
-  ssid: "foo"
-  password: "12345678"
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
 
 api:
+  encryption:
+    key: !secret api_encryption_key
+
   actions:
     - action: get_map_config
       supports_response: only
@@ -50,18 +53,9 @@ aqara_fp2:
 
   uart_id: uart_bus
 
-  # Radar Reset Pin (from README: IO13 - RAD U11 / NRESET)
-  reset_pin: GPIO13
+  radar_reset_pin: GPIO13
   mounting_position: left_corner
   left_right_reverse: false
-
-  presence_sensitivity: medium
-  closing_setting: 1
-  fall_detection_sensitivity: low
-
-  people_counting_report_enable: false
-  people_number_enable: false
-  target_type_enable: false
 
   target_tracking:
     name: "Targets"
@@ -102,9 +96,15 @@ aqara_fp2:
     . . . . . . . . . . . . . .
     . . . . . . . . . . . . . .
 
+  global_zone:
+    presence_sensitivity: medium
+    presence:
+      name: "Global Presence"
+    motion:
+      name: "Global Motion"
+
   zones:
     - id: sofa_zone
-      sensitivity: high
       grid: |-
         . . X X X . . . . . . . . .
         . . X X X . . . . . . . . .
@@ -120,48 +120,24 @@ aqara_fp2:
         . . . . . . . . . . . . . .
         . . . . . . . . . . . . . .
         . . . . . . . . . . . . . .
-      presence: sofa_zone_presence
-      zone_map: sofa_zone_map
+      presence_sensitivity: high
+      presence:
+        name: "Sofa Zone Presence"
+      motion:
+        name: "Sofa Zone Motion"
 
-  edge_label_grid_sensor: edge_label_grid_sensor
-  entry_exit_grid_sensor: entry_exit_grid_sensor
-  interference_grid_sensor: interference_grid_sensor
-  mounting_position_sensor: mounting_position_sensor
+  radar_software_version:
+    name: "Radar Software Version"
+  radar_temperature:
+    name: "Radar Temperature"
 
-# User Button (README: SENSOR_VP - USER_SWITCH -> GPIO36)
 binary_sensor:
+  # Button on the bottom of the device
   - platform: gpio
-    pin: GPIO36
-    name: "User Button"
-    on_press:
-      then:
-        - logger.log: "Button Pressed!"
-
-  - platform: template
-    id: sofa_zone_presence
-    name: "Sofa Zone Presence"
-    device_class: occupancy
-
-text_sensor:
-  - platform: template
-    id: mounting_position_sensor
-    name: "Mounting Position"
-
-  - platform: template
-    id: edge_label_grid_sensor
-    name: "Edge Label Grid"
-
-  - platform: template
-    id: entry_exit_grid_sensor
-    name: "Entry Exit Grid"
-
-  - platform: template
-    id: interference_grid_sensor
-    name: "Interference Grid"
-
-  - platform: template
-    id: sofa_zone_map
-    name: "Zone Map"
+    pin:
+      number: GPIO36
+      inverted: true
+    name: "Device Button"
 
 # Status LED (README: IO27 - LED). Using one channel of RGB as status.
 # Unused: IO26, IO14

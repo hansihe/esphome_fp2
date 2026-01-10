@@ -3,7 +3,7 @@ import json
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome import pins
-from esphome.components import binary_sensor, switch, uart
+from esphome.components import binary_sensor, sensor, switch, uart
 from esphome.components import text_sensor as text_sensor_
 from esphome.const import (
     CONF_DEVICE_CLASS,
@@ -13,8 +13,16 @@ from esphome.const import (
     CONF_ICON,
     CONF_ID,
     CONF_NAME,
-    CONF_RESET_PIN,
     CONF_SECOND,
+    CONF_MOTION,
+    DEVICE_CLASS_TEMPERATURE,
+    DEVICE_CLASS_OCCUPANCY,
+    DEVICE_CLASS_MOTION,
+    STATE_CLASS_MEASUREMENT,
+    ENTITY_CATEGORY_DIAGNOSTIC,
+    UNIT_CELSIUS,
+    ICON_THERMOMETER,
+    ICON_MOTION_SENSOR,
 )
 from esphome.core import CORE
 from esphome.util import Registry
@@ -22,7 +30,7 @@ from esphome.util import Registry
 from ..aqara_fp2_accel import AqaraFP2Accel
 
 DEPENDENCIES = ["uart"]
-AUTO_LOAD = ["binary_sensor", "text_sensor", "switch"]
+AUTO_LOAD = ["binary_sensor", "text_sensor", "sensor", "switch", "json"]
 
 aqara_fp2_ns = cg.esphome_ns.namespace("aqara_fp2")
 FP2Component = aqara_fp2_ns.class_("FP2Component", cg.Component, uart.UARTDevice)
@@ -41,8 +49,8 @@ CONF_GRID = "grid"
 CONF_SENSITIVITY = "sensitivity"
 
 # New Options
+CONF_RADAR_RESET_PIN = "radar_reset_pin"
 CONF_PRESENCE_SENSITIVITY = "presence_sensitivity"
-CONF_CLOSING_SETTING = "closing_setting"
 CONF_FALL_DETECTION_SENSITIVITY = "fall_detection_sensitivity"
 CONF_PEOPLE_COUNTING_REPORT_ENABLE = "people_counting_report_enable"
 CONF_PEOPLE_NUMBER_ENABLE = "people_number_enable"
@@ -51,6 +59,10 @@ CONF_DWELL_TIME_ENABLE = "dwell_time_enable"
 CONF_WALKING_DISTANCE_ENABLE = "walking_distance_enable"
 CONF_TARGET_TRACKING = "target_tracking"
 CONF_LOCATION_REPORT_SWITCH = "location_report_switch"
+CONF_RADAR_TEMPERATURE = "radar_temperature"
+CONF_PRESENCE = "presence"
+CONF_GLOBAL_ZONE = "global_zone"
+CONF_RADAR_SOFTWARE_VERSION = "radar_software_version"
 
 MOUNTING_POSITIONS = {
     "wall": 0x01,
@@ -133,59 +145,96 @@ def grid_to_hex_string(grid_data):
     """Convert a 40-byte grid to a compact hex string for storage."""
     return "".join(f"{b:02x}" for b in grid_data)
 
-
-ZONE_SCHEMA = cv.Schema(
+ZONE_BASE_SCHEMA = cv.Schema(
     {
-        cv.GenerateID(CONF_ID): cv.declare_id(FP2Zone),
-        cv.Required(CONF_GRID): parse_ascii_grid,
-        cv.Optional(CONF_SENSITIVITY, default="medium"): cv.enum(SENSITIVITY_LEVELS),
-        cv.Optional("presence"): cv.use_id(binary_sensor.BinarySensor),
-        cv.Optional("motion"): cv.use_id(binary_sensor.BinarySensor),
-        cv.Optional("zone_map"): cv.use_id(text_sensor_.TextSensor),
+        cv.Optional(CONF_PRESENCE_SENSITIVITY, default="medium"): cv.enum(SENSITIVITY_LEVELS),
+        cv.Optional(CONF_PRESENCE): binary_sensor.binary_sensor_schema(
+            device_class=DEVICE_CLASS_OCCUPANCY,
+            filters=[{"settle": cv.TimePeriod(milliseconds=1000)}],
+        ),
+        cv.Optional(CONF_MOTION): binary_sensor.binary_sensor_schema(
+            device_class=DEVICE_CLASS_MOTION,
+            icon=ICON_MOTION_SENSOR,
+        ),
     }
 )
 
+ZONE_SCHEMA = (
+    cv.Schema(
+        {
+            cv.GenerateID(CONF_ID): cv.declare_id(FP2Zone),
+            cv.Required(CONF_GRID): parse_ascii_grid,
+            cv.Optional("zone_map_sensor"): text_sensor_.text_sensor_schema(entity_category=ENTITY_CATEGORY_DIAGNOSTIC),
+        }
+    ).extend(ZONE_BASE_SCHEMA)
+)
 
 CONFIG_SCHEMA = (
     cv.Schema(
         {
             cv.GenerateID(): cv.declare_id(FP2Component),
             cv.Required("accel"): cv.use_id(AqaraFP2Accel),
-            cv.Optional(CONF_RESET_PIN): pins.gpio_output_pin_schema,
+
+            cv.Optional(CONF_RADAR_RESET_PIN): pins.gpio_output_pin_schema,
             cv.Optional(CONF_MOUNTING_POSITION, default="left_corner"): cv.enum(
                 MOUNTING_POSITIONS
             ),
+
             cv.Optional(CONF_LEFT_RIGHT_REVERSE, default=False): cv.boolean,
-            cv.Optional(CONF_PRESENCE_SENSITIVITY, default="medium"): cv.enum(
-                SENSITIVITY_LEVELS
-            ),
-            cv.Optional(CONF_CLOSING_SETTING, default=1): cv.int_range(min=1),
-            cv.Optional(CONF_FALL_DETECTION_SENSITIVITY, default="low"): cv.enum(
-                SENSITIVITY_LEVELS
-            ),
-            cv.Optional(CONF_PEOPLE_COUNTING_REPORT_ENABLE, default=False): cv.boolean,
-            cv.Optional(CONF_PEOPLE_NUMBER_ENABLE, default=False): cv.boolean,
-            cv.Optional(CONF_TARGET_TYPE_ENABLE, default=False): cv.boolean,
-            cv.Optional(CONF_DWELL_TIME_ENABLE, default=False): cv.boolean,
-            cv.Optional(CONF_WALKING_DISTANCE_ENABLE, default=False): cv.boolean,
             cv.Optional(CONF_INTERFERENCE_GRID): parse_ascii_grid,
             cv.Optional(CONF_EXIT_GRID): parse_ascii_grid,
             cv.Optional(CONF_EDGE_GRID): parse_ascii_grid,
-            cv.Optional(CONF_ZONES): cv.ensure_list(ZONE_SCHEMA),
-            cv.Optional(CONF_TARGET_TRACKING): text_sensor_.text_sensor_schema(),
+
+            cv.Optional(CONF_TARGET_TRACKING): text_sensor_.text_sensor_schema(entity_category=ENTITY_CATEGORY_DIAGNOSTIC),
             cv.Optional(CONF_LOCATION_REPORT_SWITCH): switch.switch_schema(
                 FP2LocationSwitch
             ),
-            cv.Optional("edge_label_grid_sensor"): cv.use_id(text_sensor_.TextSensor),
-            cv.Optional("entry_exit_grid_sensor"): cv.use_id(text_sensor_.TextSensor),
-            cv.Optional("interference_grid_sensor"): cv.use_id(text_sensor_.TextSensor),
-            cv.Optional("mounting_position_sensor"): cv.use_id(text_sensor_.TextSensor),
+
+            cv.Optional("edge_label_grid_sensor"): text_sensor_.text_sensor_schema(entity_category=ENTITY_CATEGORY_DIAGNOSTIC),
+            cv.Optional("entry_exit_grid_sensor"): text_sensor_.text_sensor_schema(entity_category=ENTITY_CATEGORY_DIAGNOSTIC),
+            cv.Optional("interference_grid_sensor"): text_sensor_.text_sensor_schema(entity_category=ENTITY_CATEGORY_DIAGNOSTIC),
+            cv.Optional("mounting_position_sensor"): text_sensor_.text_sensor_schema(entity_category=ENTITY_CATEGORY_DIAGNOSTIC),
+
+            cv.Optional(CONF_GLOBAL_ZONE): ZONE_BASE_SCHEMA,
+            cv.Optional(CONF_ZONES): cv.ensure_list(ZONE_SCHEMA),
+
+            cv.Optional(CONF_RADAR_SOFTWARE_VERSION): text_sensor_.text_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(CONF_RADAR_TEMPERATURE): sensor.sensor_schema(
+                unit_of_measurement=UNIT_CELSIUS,
+                icon=ICON_THERMOMETER,
+                accuracy_decimals=0,
+                device_class=DEVICE_CLASS_TEMPERATURE,
+                state_class=STATE_CLASS_MEASUREMENT,
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
         }
     )
     .extend(uart.UART_DEVICE_SCHEMA)
     .extend(cv.COMPONENT_SCHEMA)
 )
 
+SENSOR_MAP = {
+    CONF_RADAR_TEMPERATURE: (sensor.new_sensor, "set_radar_temperature_sensor"),
+    CONF_RADAR_SOFTWARE_VERSION: (text_sensor_.new_text_sensor, "set_radar_software_sensor"),
+    CONF_LOCATION_REPORT_SWITCH: (switch.new_switch, "set_location_report_switch"),
+    CONF_TARGET_TRACKING: (text_sensor_.new_text_sensor, "set_target_tracking_sensor"),
+
+    # Text config sensors
+    "edge_label_grid_sensor": (text_sensor_.new_text_sensor, "set_edge_label_grid_sensor"),
+    "entry_exit_grid_sensor": (text_sensor_.new_text_sensor, "set_entry_exit_grid_sensor"),
+    "interference_grid_sensor": (text_sensor_.new_text_sensor, "set_interference_grid_sensor"),
+    "mounting_position_sensor": (text_sensor_.new_text_sensor, "set_mounting_position_sensor"),
+}
+
+ZONE_SENSOR_MAP = {
+    CONF_PRESENCE: (binary_sensor.new_binary_sensor, "set_presence_sensor"),
+    CONF_MOTION: (binary_sensor.new_binary_sensor, "set_motion_sensor"),
+
+    # Text config sensors
+    "zone_map_sensor": (text_sensor_.new_text_sensor, "set_map_sensor"),
+}
 
 async def to_code(config):
     zones = []
@@ -195,22 +244,15 @@ async def to_code(config):
                 zone_conf[CONF_ID],
                 i + 1,
                 zone_conf[CONF_GRID],
-                zone_conf[CONF_SENSITIVITY],
+                zone_conf[CONF_PRESENCE_SENSITIVITY],
             )
             await cg.register_component(var, zone_conf)
 
-            # Link sensors if provided
-            if "presence" in zone_conf:
-                sens = await cg.get_variable(zone_conf["presence"])
-                cg.add(var.set_presence_sensor(sens))
-
-            if "motion" in zone_conf:
-                sens = await cg.get_variable(zone_conf["motion"])
-                cg.add(var.set_motion_sensor(sens))
-
-            if "zone_map" in zone_conf:
-                sens = await cg.get_variable(zone_conf["zone_map"])
-                cg.add(var.set_map_sensor(sens))
+            # Create sensors if provided
+            for key, (new, funcName) in ZONE_SENSOR_MAP.items():
+                if key in zone_conf:
+                    sens = await new(zone_conf[key])
+                    cg.add(getattr(var, funcName)(sens))
 
             zones.append(var)
 
@@ -218,25 +260,23 @@ async def to_code(config):
     await cg.register_component(var, config)
     await uart.register_uart_device(var, config)
 
-    if CONF_RESET_PIN in config:
-        reset_pin = await cg.gpio_pin_expression(config[CONF_RESET_PIN])
-        cg.add(var.set_reset_pin(reset_pin))
+    if CONF_RADAR_RESET_PIN in config:
+        reset_pin = await cg.gpio_pin_expression(config[CONF_RADAR_RESET_PIN])
+        cg.add(var.set_radar_reset_pin(reset_pin))
 
     cg.add(var.set_mounting_position(config[CONF_MOUNTING_POSITION]))
     cg.add(var.set_left_right_reverse(config[CONF_LEFT_RIGHT_REVERSE]))
 
-    cg.add(var.set_presence_sensitivity(config[CONF_PRESENCE_SENSITIVITY]))
-    cg.add(var.set_closing_setting(config[CONF_CLOSING_SETTING]))
-    cg.add(var.set_fall_detection_sensitivity(config[CONF_FALL_DETECTION_SENSITIVITY]))
-    cg.add(
-        var.set_people_counting_report_enable(
-            config[CONF_PEOPLE_COUNTING_REPORT_ENABLE]
-        )
-    )
-    cg.add(var.set_people_number_enable(config[CONF_PEOPLE_NUMBER_ENABLE]))
-    cg.add(var.set_target_type_enable(config[CONF_TARGET_TYPE_ENABLE]))
-    cg.add(var.set_dwell_time_enable(config[CONF_DWELL_TIME_ENABLE]))
-    cg.add(var.set_walking_distance_enable(config[CONF_WALKING_DISTANCE_ENABLE]))
+    if CONF_GLOBAL_ZONE in config:
+        global_zone_conf = config[CONF_GLOBAL_ZONE]
+
+        cg.add(var.set_presence_sensitivity(global_zone_conf[CONF_PRESENCE_SENSITIVITY]))
+
+        for key, (new, funcName) in ZONE_SENSOR_MAP.items():
+            if key in global_zone_conf:
+                sens = await new(global_zone_conf[key])
+                cg.add(getattr(var, funcName)(sens))
+
 
     if CONF_INTERFERENCE_GRID in config:
         cg.add(var.set_interference_grid(config[CONF_INTERFERENCE_GRID]))
@@ -249,30 +289,10 @@ async def to_code(config):
 
     cg.add(var.set_zones(zones))
 
-    if CONF_TARGET_TRACKING in config:
-        sens = await text_sensor_.new_text_sensor(config[CONF_TARGET_TRACKING])
-        cg.add(var.set_target_tracking_sensor(sens))
-
-    if CONF_LOCATION_REPORT_SWITCH in config:
-        sw = await switch.new_switch(config[CONF_LOCATION_REPORT_SWITCH])
-        cg.add(var.set_location_report_switch(sw))
-
-    # Link component text sensors if provided
-    if "edge_label_grid_sensor" in config:
-        sens = await cg.get_variable(config["edge_label_grid_sensor"])
-        cg.add(var.set_edge_label_grid_sensor(sens))
-
-    if "entry_exit_grid_sensor" in config:
-        sens = await cg.get_variable(config["entry_exit_grid_sensor"])
-        cg.add(var.set_entry_exit_grid_sensor(sens))
-
-    if "interference_grid_sensor" in config:
-        sens = await cg.get_variable(config["interference_grid_sensor"])
-        cg.add(var.set_interference_grid_sensor(sens))
-
-    if "mounting_position_sensor" in config:
-        sens = await cg.get_variable(config["mounting_position_sensor"])
-        cg.add(var.set_mounting_position_sensor(sens))
+    for key, (new, funcName) in SENSOR_MAP.items():
+        if key in config:
+            sens = await new(config[key])
+            cg.add(getattr(var, funcName)(sens))
 
     # Generate map config JSON data at compile time
     map_config_data = {
@@ -297,7 +317,7 @@ async def to_code(config):
         zones_data = []
         for zone_conf in config[CONF_ZONES]:
             zone_data = {
-                "sensitivity": zone_conf[CONF_SENSITIVITY],
+                "sensitivity": zone_conf[CONF_PRESENCE_SENSITIVITY],
                 "grid": grid_to_hex_string(zone_conf[CONF_GRID]),
             }
             zones_data.append(zone_data)

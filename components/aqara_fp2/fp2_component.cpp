@@ -97,17 +97,19 @@ void FP2Component::check_initialization_() {
     enqueue_command_(OpCode::WRITE, AttrId::MONITOR_MODE, (uint8_t) 0);
     enqueue_command_(OpCode::WRITE, AttrId::LEFT_RIGHT_REVERSE,
                      (uint8_t)(left_right_reverse_ ? 2 : 0));
-    enqueue_command_(OpCode::WRITE, AttrId::PRESENCE_DETECT_SENSITIVITY, presence_sensitivity_);
-    enqueue_command_(OpCode::WRITE, AttrId::CLOSING_SETTING, closing_setting_);
+    enqueue_command_(OpCode::WRITE, AttrId::PRESENCE_DETECT_SENSITIVITY, global_presence_sensitivity_);
+    enqueue_command_(OpCode::WRITE, AttrId::CLOSING_SETTING, (uint8_t) 1);
     enqueue_command_(OpCode::WRITE, AttrId::ZONE_CLOSE_AWAY_ENABLE, (uint16_t) 0x0001);
-    enqueue_command_(OpCode::WRITE, AttrId::FALL_SENSITIVITY, fall_detection_sensitivity_);
-    enqueue_command_(OpCode::WRITE, AttrId::PEOPLE_COUNT_REPORT_ENABLE, people_counting_report_enable_); // BOOL
-    enqueue_command_(OpCode::WRITE, AttrId::PEOPLE_NUMBER_ENABLE, people_number_enable_); // BOOL
-    enqueue_command_(OpCode::WRITE, AttrId::TARGET_TYPE_ENABLE, target_type_enable_); // BOOL
-    enqueue_command_(OpCode::WRITE, AttrId::SLEEP_MOUNT_POSITION, (uint8_t) 0); // sleep zone mount pos
+    // enqueue_command_(OpCode::WRITE, AttrId::FALL_SENSITIVITY, fall_detection_sensitivity_);
+    enqueue_command_(OpCode::WRITE, AttrId::PEOPLE_COUNT_REPORT_ENABLE, true); // BOOL
+    enqueue_command_(OpCode::WRITE, AttrId::PEOPLE_NUMBER_ENABLE, true); // BOOL
+    enqueue_command_(OpCode::WRITE, AttrId::TARGET_TYPE_ENABLE, true); // BOOL
+    // enqueue_command_(OpCode::WRITE, AttrId::SLEEP_MOUNT_POSITION, (uint8_t) 0); // sleep zone mount pos
     enqueue_command_(OpCode::WRITE, AttrId::WALL_CORNER_POS, mounting_position_);
     enqueue_command_(OpCode::WRITE, AttrId::DWELL_TIME_ENABLE, (uint8_t) 0); // dwell time enable
     enqueue_command_(OpCode::WRITE, AttrId::WALK_DISTANCE_ENABLE, (uint8_t) 0); // walking distance enable
+    enqueue_command_(OpCode::WRITE, AttrId::THERMO_EN, true);
+    enqueue_command_(OpCode::WRITE, AttrId::THERMO_DATA, (uint8_t) 1);
 
     // 2. Grids
     if (has_interference_grid_) {
@@ -154,6 +156,10 @@ void FP2Component::check_initialization_() {
         enqueue_command_(OpCode::WRITE, AttrId::ZONE_CLOSE_AWAY_ENABLE, (uint16_t)((zone->id << 8) | 1));
     }
 
+    // enqueue_read_((AttrId) 0x302); // Read radar flash ID attribute
+    // enqueue_read_((AttrId) 0x303); // Read radar ID attribute
+    // enqueue_read_((AttrId) 0x305); // Read radar calibration result attribute
+
     // 5. Publish grid sensors once initialization completes
     ESP_LOGI(TAG, "Publishing grid sensors: has_edge=%d edge_sensor=%p has_exit=%d exit_sensor=%p has_interference=%d interference_sensor=%p",
              has_edge_grid_, edge_label_grid_sensor_, has_exit_grid_, entry_exit_grid_sensor_, has_interference_grid_, interference_grid_sensor_);
@@ -193,6 +199,9 @@ void FP2Component::check_initialization_() {
       zone->publish_presence(false);
       zone->publish_motion(false);
     }
+
+    if (global_presence_sensor_ != nullptr) global_presence_sensor_->publish_state(false);
+    if (global_motion_sensor_ != nullptr) global_motion_sensor_->publish_state(false);
 
     // Clear target tracking state - no targets after reset
     if (target_tracking_sensor_ != nullptr) {
@@ -461,36 +470,93 @@ void FP2Component::handle_report_(AttrId attr_id, const std::vector<uint8_t> &pa
   switch (attr_id) {
     case AttrId::RADAR_SW_VERSION:  // Heartbeat
       last_heartbeat_millis_ = millis();
-      break;
+      if (payload.size() == 4 && payload[2] == 0x00) {
+        auto ver_str = std::to_string(payload[3]);
+        if (radar_software_sensor_ != nullptr) {
+            if (radar_software_sensor_->state != ver_str) {
+                radar_software_sensor_->publish_state(ver_str);
+            }
+        }
+        break;
+      }
+
+    case AttrId::WORK_MODE:
+        if (payload.size() == 4 && payload[2] == 0x00) {
+            ESP_LOGI(TAG, "Received work mode report: %u", payload[3]);
+            break;
+        }
+
+    case AttrId::DETECT_ZONE_MOTION:
+        if (payload.size() == 5 && payload[2] == 0x01) {
+            uint8_t zone_id = payload[3];
+            uint8_t state = payload[4];
+            ESP_LOGD(TAG, "Zone Motion Report: Zone %u = %u", zone_id, state);
+
+            //for (auto &z : zones_) {
+            //  if (z->id == zone_id) {
+            //    z->publish_motion(state == 1);
+            //    break;
+            //  }
+            //}
+            break;
+        }
+
+    case AttrId::MOTION_DETECT:
+        if (payload.size() == 4 && payload[2]  == 0x00) {
+            uint8_t state = payload[3];
+            global_motion_sensor_->publish_state(state == 0);
+            ESP_LOGI(TAG, "Received global motion report: %u", state);
+            break;
+        }
+
+    case AttrId::PRESENCE_DETECT:
+        if (payload.size() == 4 && payload[2]  == 0x00) {
+            uint8_t state = payload[3];
+            global_presence_sensor_->publish_state(state != 0);
+            ESP_LOGI(TAG, "Received global presence report: %u", state);
+            break;
+        }
+        break;
+
+    case AttrId::ONTIME_PEOPLE_NUMBER:
+        if (payload.size() == 7 && payload[2]  == 0x02) {
+            uint32_t count = ((uint32_t) payload[3]) << 24
+                | ((uint32_t) payload[4]) << 16
+                | ((uint32_t) payload[5]) << 8
+                | ((uint32_t) payload[6]);
+            ESP_LOGI(TAG, "Received ontime people number report: %u", count);
+        }
+        break;
 
     case AttrId::ZONE_PRESENCE:  // Zone Presence
-      handle_zone_presence_report_(payload);
-      break;
+        // Payload: [SubID 2B] [Type 0x01(UINT16)] [ValH] [ValL]
+        // ValH = ZoneID, ValL = State (1=Occ, 0=Empty)
+        if (payload.size() >= 5 && payload[2] == 0x01) {
+            uint8_t zone_id = payload[3];
+            uint8_t state = payload[4];
+            ESP_LOGD(TAG, "Zone Presence Report: Zone %d = %s", zone_id, state ? "ON" : "OFF");
+
+            for (auto &z : zones_) {
+                if (z->id == zone_id) {
+                    z->publish_presence(state == 1);
+                    break;
+                }
+            }
+            break;
+        }
 
     case AttrId::LOCATION_TRACKING_DATA:  // Location Tracking Data
       handle_location_tracking_report_(payload);
       break;
 
+    case AttrId::TEMPERATURE:
+      handle_temperature_report_(payload);
+      break;
+
     default:
       // Unknown report type - already logged in main handler
+      ESP_LOGW(TAG, "Unhandled report 0x%04X", (uint16_t) attr_id);
       break;
-  }
-}
-
-void FP2Component::handle_zone_presence_report_(const std::vector<uint8_t> &payload) {
-  // Payload: [SubID 2B] [Type 0x01(UINT16)] [ValH] [ValL]
-  // ValH = ZoneID, ValL = State (1=Occ, 0=Empty)
-  if (payload.size() >= 5 && payload[2] == 0x01) {
-    uint8_t zone_id = payload[3];
-    uint8_t state = payload[4];
-    ESP_LOGD(TAG, "Zone Presence Report: Zone %d = %s", zone_id, state ? "ON" : "OFF");
-
-    for (auto &z : zones_) {
-      if (z->id == zone_id) {
-        z->publish_presence(state == 1);
-        break;
-      }
-    }
   }
 }
 
@@ -529,6 +595,18 @@ void FP2Component::handle_location_tracking_report_(const std::vector<uint8_t> &
   if (this->target_tracking_sensor_ != nullptr) {
     this->target_tracking_sensor_->publish_state(base64_str);
   }
+}
+
+void FP2Component::handle_temperature_report_(const std::vector<uint8_t> &payload) {
+    if (payload.size() == 5 && payload[2] == 0x01) {
+        uint16_t temp = payload[3] << 8 | payload[4];
+        if (radar_temperature_sensor_ != nullptr) {
+            radar_temperature_sensor_->publish_state(temp);
+        }
+        ESP_LOGD(TAG, "Radar temperature report: %d", temp);
+    } else {
+        ESP_LOGD(TAG, "Unexpected radar temperature report format");
+    }
 }
 
 void FP2Component::handle_response_(AttrId attr_id, const std::vector<uint8_t> &payload) {
@@ -634,6 +712,18 @@ void FP2Component::enqueue_command_blob2_(
   cmd.data.insert(cmd.data.end(), blob_content.begin(), blob_content.end());
 
   command_queue_.push_back(cmd);
+}
+
+void FP2Component::enqueue_read_(AttrId attr_id) {
+    FP2Command cmd;
+    cmd.type = OpCode::RESPONSE;
+    cmd.attr_id = attr_id;
+    cmd.retry_count = 0;
+
+    cmd.data.push_back((((uint16_t) attr_id) >> 8) & 0xFF);
+    cmd.data.push_back(((uint16_t) attr_id) & 0xFF);
+
+    command_queue_.push_back(cmd);
 }
 
 void FP2Component::set_interference_grid(const std::vector<uint8_t> &grid) {

@@ -2,6 +2,7 @@
 
 #include "esphome/components/binary_sensor/binary_sensor.h"
 #include "esphome/components/switch/switch.h"
+#include "esphome/components/sensor/sensor.h"
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/components/uart/uart.h"
 #include "esphome/core/component.h"
@@ -66,6 +67,16 @@ struct FP2Zone : public Component {
 
 class FP2Component;
 
+enum class DataType : uint8_t {
+    UINT8 = 0x00,
+    UINT16 = 0x01,
+    UINT32 = 0x02,
+    VOID = 0x03,
+    BOOL = 0x04,
+    STRING = 0x05,
+    BINARY = 0x06,
+};
+
 enum class OpCode : uint8_t {
   // Device -> Host: Standard Response to Read (Values).
   // Device -> Host: Reverse Read Request (SubID only, len=2).
@@ -87,6 +98,7 @@ enum class OpCode : uint8_t {
 
 enum class AttrId : uint16_t {
     RADAR_SW_VERSION                = 0x0102,
+    WORK_MODE                       = 0x0116,
     MONITOR_MODE                    = 0x0105, // Detection direction (0=default, 1=L/R)
     LEFT_RIGHT_REVERSE              = 0x0122, // L/R swap (0/1/2)
     PRESENCE_DETECT_SENSITIVITY     = 0x0111, // Sensitivity (1-3)
@@ -113,6 +125,13 @@ enum class AttrId : uint16_t {
     LOCATION_REPORT_ENABLE          = 0x0112,
     ZONE_PRESENCE                   = 0x0142,
     LOCATION_TRACKING_DATA          = 0x0117,
+    THERMO_EN                       = 0x0138,
+    THERMO_DATA                     = 0x0141,
+    TEMPERATURE                     = 0x0128,
+    DETECT_ZONE_MOTION              = 0x0115,
+    MOTION_DETECT                   = 0x0103,
+    PRESENCE_DETECT                 = 0x0104,
+    ONTIME_PEOPLE_NUMBER            = 0x0165,
     INVALID                         = 0xFFFF,
 };
 
@@ -140,26 +159,21 @@ public:
   void dump_config() override;
 
   // Configuration setters
-  void set_reset_pin(GPIOPin *pin) { reset_pin_ = pin; }
+  void set_radar_reset_pin(GPIOPin *pin) { reset_pin_ = pin; }
   void set_mounting_position(uint8_t pos) { mounting_position_ = pos; }
   void set_left_right_reverse(bool val) { left_right_reverse_ = val; }
 
-  void set_presence_sensitivity(uint8_t val) { presence_sensitivity_ = val; }
-  void set_closing_setting(uint8_t val) { closing_setting_ = val; }
   void set_fall_detection_sensitivity(uint8_t val) {
     fall_detection_sensitivity_ = val;
   }
-  void set_people_counting_report_enable(bool val) {
-    people_counting_report_enable_ = val;
-  }
-  void set_people_number_enable(bool val) { people_number_enable_ = val; }
-  void set_target_type_enable(bool val) { target_type_enable_ = val; }
-  void set_dwell_time_enable(bool val) { dwell_time_enable_ = val; }
-  void set_walking_distance_enable(bool val) { walking_distance_enable_ = val; }
 
   void set_interference_grid(const std::vector<uint8_t> &grid);
   void set_exit_grid(const std::vector<uint8_t> &grid);
   void set_edge_grid(const std::vector<uint8_t> &grid);
+
+  void set_presence_sensitivity(uint8_t val) { global_presence_sensitivity_ = val; }
+  void set_motion_sensor(binary_sensor::BinarySensor *sensor) { global_motion_sensor_ = sensor; }
+  void set_presence_sensor(binary_sensor::BinarySensor *sensor) { global_presence_sensor_ = sensor; }
 
   //void add_zone(uint8_t id, binary_sensor::BinarySensor *sens,
   //              const std::vector<uint8_t> &grid, uint8_t sensitivity);
@@ -215,6 +229,12 @@ public:
       mounting_position_sensor_->publish_state(pos_str);
     }
   }
+  void set_radar_temperature_sensor(sensor::Sensor *sensor) {
+      radar_temperature_sensor_ = sensor;
+  }
+  void set_radar_software_sensor(text_sensor::TextSensor *sensor) {
+      radar_software_sensor_ = sensor;
+  }
 
   void set_fp2_accel(aqara_fp2_accel::AqaraFP2Accel *accel) {
       fp2_accel_ = accel;
@@ -240,8 +260,8 @@ protected:
                             const std::vector<uint8_t> &payload);
   void handle_ack_(AttrId attr_id);
   void handle_report_(AttrId attr_id, const std::vector<uint8_t> &payload);
-  void handle_zone_presence_report_(const std::vector<uint8_t> &payload);
   void handle_location_tracking_report_(const std::vector<uint8_t> &payload);
+  void handle_temperature_report_(const std::vector<uint8_t> &payload);
   void handle_response_(AttrId attr_id, const std::vector<uint8_t> &payload);
   void handle_reverse_read_request_(AttrId attr_id);
   void send_ack_(AttrId attr_id);
@@ -259,14 +279,7 @@ protected:
   // Configuration State
   uint8_t mounting_position_{0x01}; // Default Wall
   bool left_right_reverse_{false};
-  uint8_t presence_sensitivity_{2}; // Default Medium
-  uint8_t closing_setting_{1};
   uint8_t fall_detection_sensitivity_{1};
-  bool people_counting_report_enable_{false};
-  bool people_number_enable_{false};
-  bool target_type_enable_{false};
-  bool dwell_time_enable_{false};
-  bool walking_distance_enable_{false};
 
   // Grids (Optional)
   GridMap interference_grid_{};
@@ -275,6 +288,11 @@ protected:
   bool has_exit_grid_{false};
   GridMap edge_grid_{};
   bool has_edge_grid_{false};
+
+  // Global zone
+  uint8_t global_presence_sensitivity_{2}; // Default Medium
+  binary_sensor::BinarySensor *global_presence_sensor_{nullptr};
+  binary_sensor::BinarySensor *global_motion_sensor_{nullptr};
 
   // Zones
   std::vector<FP2Zone*> zones_;
@@ -287,6 +305,9 @@ protected:
   text_sensor::TextSensor *entry_exit_grid_sensor_{nullptr};
   text_sensor::TextSensor *interference_grid_sensor_{nullptr};
   text_sensor::TextSensor *mounting_position_sensor_{nullptr};
+
+  sensor::Sensor *radar_temperature_sensor_{nullptr};
+  text_sensor::TextSensor *radar_software_sensor_{nullptr};
 
   // Map Configuration (compile-time generated)
   std::string map_config_json_;
@@ -319,7 +340,7 @@ protected:
   uint16_t header_sum_{0};
 
   // Ack Manager
-  // We track the SubID of the command we are currently waiting for an ACK for.
+  // We track the SubID of tAttrId::INVALID command we are currently waiting for an ACK for.
   // 0xFFFF = Not waiting.
   AttrId waiting_for_ack_attr_id_{AttrId::INVALID};
   uint32_t last_command_sent_millis_{0};
@@ -331,6 +352,7 @@ protected:
   void enqueue_command_(OpCode type, AttrId attr_id, bool bool_val);
   void enqueue_command_blob2_(AttrId attr_id,
                               const std::vector<uint8_t> &blob_content);
+  void enqueue_read_(AttrId attr_id);
   void send_reverse_response_(AttrId attr_id, uint8_t byte_val);
 };
 
