@@ -85,9 +85,40 @@ enum class OpCode : uint8_t {
   REPORT = 0x05,
 };
 
+enum class AttrId : uint16_t {
+    RADAR_SW_VERSION                = 0x0102,
+    MONITOR_MODE                    = 0x0105, // Detection direction (0=default, 1=L/R)
+    LEFT_RIGHT_REVERSE              = 0x0122, // L/R swap (0/1/2)
+    PRESENCE_DETECT_SENSITIVITY     = 0x0111, // Sensitivity (1-3)
+    CLOSING_SETTING                 = 0x0106, // Proximity (0=far, 1=med, 2=close)
+    ZONE_CLOSE_AWAY_ENABLE          = 0x0153, // Zone N close/away enable
+    FALL_SENSITIVITY                = 0x0123, // Fall sensitivity
+    PEOPLE_COUNT_REPORT_ENABLE      = 0x0158, // People counting enable
+    PEOPLE_NUMBER_ENABLE            = 0x0162, // People number enable
+    TARGET_TYPE_ENABLE              = 0x0163, // AI person detection
+    SLEEP_MOUNT_POSITION            = 0x0168, // Sleep mount position
+    SLEEP_ZONE_SIZE                 = 0x0169, // Sleep zone dimensions
+    WALL_CORNER_POS                 = 0x0170, // Wall/corner position
+    DWELL_TIME_ENABLE               = 0x0172, // Dwell tracking
+    WALK_DISTANCE_ENABLE            = 0x0173, // Walking distance
+    INTERFERENCE_MAP                = 0x0110, // Interference map (40B)
+    ENTRY_EXIT_MAP                  = 0x0109, // Enter/exit zones (40B)
+    EDGE_MAP                        = 0x0107, // Detection boundary (40B)
+    ZONE_MAP                        = 0x0114, // Zone N area map (1B ID + 40B)
+    ZONE_SENSITIVITY                = 0x0151, // Zone N sensitivity
+    ZONE_ACTIVATION_LIST            = 0x0202, // Auxiliary config (32B)
+    DETECT_ZONE_TYPE                = 0x0152, // Zone N type
+    DEVICE_DIRECTION                = 0x0143,
+    ANGLE_SENSOR_DATA               = 0x0120,
+    LOCATION_REPORT_ENABLE          = 0x0112,
+    ZONE_PRESENCE                   = 0x0142,
+    LOCATION_TRACKING_DATA          = 0x0117,
+    INVALID                         = 0xFFFF,
+};
+
 struct FP2Command {
   OpCode type;
-  uint16_t sub_id;
+  AttrId attr_id;
   std::vector<uint8_t> data;
   uint32_t last_send_time;
   uint8_t retry_count;
@@ -205,15 +236,15 @@ protected:
   void send_next_command_();
   void handle_incoming_byte_(uint8_t byte);
   const char* get_mounting_position_string_();
-  void handle_parsed_frame_(uint8_t type, uint16_t sub_id,
+  void handle_parsed_frame_(uint8_t type, AttrId attr_id,
                             const std::vector<uint8_t> &payload);
-  void handle_ack_(uint16_t sub_id);
-  void handle_report_(uint16_t sub_id, const std::vector<uint8_t> &payload);
+  void handle_ack_(AttrId attr_id);
+  void handle_report_(AttrId attr_id, const std::vector<uint8_t> &payload);
   void handle_zone_presence_report_(const std::vector<uint8_t> &payload);
   void handle_location_tracking_report_(const std::vector<uint8_t> &payload);
-  void handle_response_(uint16_t sub_id, const std::vector<uint8_t> &payload);
-  void handle_reverse_read_request_(uint16_t sub_id);
-  void send_ack_(uint16_t sub_id);
+  void handle_response_(AttrId attr_id, const std::vector<uint8_t> &payload);
+  void handle_reverse_read_request_(AttrId attr_id);
+  void send_ack_(AttrId attr_id);
 
   // Initialization
   void perform_reset_();
@@ -290,17 +321,17 @@ protected:
   // Ack Manager
   // We track the SubID of the command we are currently waiting for an ACK for.
   // 0xFFFF = Not waiting.
-  uint16_t waiting_for_ack_sub_id_{0xFFFF};
+  AttrId waiting_for_ack_attr_id_{AttrId::INVALID};
   uint32_t last_command_sent_millis_{0};
   static const uint32_t ACK_TIMEOUT_MS = 500;
   static const uint8_t MAX_RETRIES = 3;
 
-  void enqueue_command_(OpCode type, uint16_t sub_id, uint8_t byte_val);
-  void enqueue_command_(OpCode type, uint16_t sub_id, uint16_t word_val);
-  void enqueue_command_(OpCode type, uint16_t sub_id, bool bool_val);
-  void enqueue_command_blob2_(uint16_t sub_id,
+  void enqueue_command_(OpCode type, AttrId attr_id, uint8_t byte_val);
+  void enqueue_command_(OpCode type, AttrId attr_id, uint16_t word_val);
+  void enqueue_command_(OpCode type, AttrId attr_id, bool bool_val);
+  void enqueue_command_blob2_(AttrId attr_id,
                               const std::vector<uint8_t> &blob_content);
-  void send_reverse_response_(uint16_t sub_id, uint8_t byte_val);
+  void send_reverse_response_(AttrId attr_id, uint8_t byte_val);
 };
 
 } // namespace aqara_fp2
